@@ -5,6 +5,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
+	"github.com/ThreeDotsLabs/watermill/message"
 )
 
 func main() {
@@ -20,5 +21,10 @@ func main() {
 		panic(err)
 	}
 
+	alpha_msg := message.NewMessage(watermill.NewUUID(), []byte("alpha"))
+	bravo_msg := message.NewMessage(watermill.NewUUID(), []byte("bravo"))
+
 	// TODO Publish messages
+	pub.Publish("status", alpha_msg)
+	pub.Publish("status", bravo_msg)
 }

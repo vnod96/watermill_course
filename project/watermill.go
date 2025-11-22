@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +15,9 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 )
 
+
+
+
 func NewWatermillRouter() (*message.Router, error) {
 	logger := newWatermillLogger()
 
@@ -22,6 +26,57 @@ func NewWatermillRouter() (*message.Router, error) {
 		return nil, fmt.Errorf("failed to create router: %w", err)
 	}
 
+	// publisher
+	pub, err := kafka.NewPublisher(
+		kafka.PublisherConfig{
+			Brokers:   []string{os.Getenv("KAFKA_ADDR")},
+			Marshaler: KafkaMarshaler,
+		},
+		logger,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kafka publisher: %w", err)
+	}
+
+	sub, err := kafka.NewSubscriber(
+		kafka.SubscriberConfig{
+			OverwriteSaramaConfig: newSubscriberSaramaConfig(),
+			Brokers:               []string{os.Getenv("KAFKA_ADDR")},
+			Unmarshaler:           KafkaMarshaler,
+			ConsumerGroup:         "splitter",
+		},
+		logger,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kafka subscriber: %w", err)
+	}
+
+	router.AddConsumerHandler("events_handler",
+		topic, sub, func(msg *message.Message) error {
+			eventName := CQRSMarshaler.NameFromMessage(msg)
+			err = pub.Publish(eventName, msg)
+			if err != nil {
+				return errors.New("failed to publish msg")
+			}
+			return nil
+		})
+
+	router.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
+		return func(msg *message.Message) ([]*message.Message, error) {
+			eventName := CQRSMarshaler.NameFromMessage(msg)
+			handlerName := message.HandlerNameFromCtx(msg.Context())
+
+			msgs, _ := h(msg)
+			
+			slog.Info(
+				"Received event",
+				"name", eventName,
+				"handler", handlerName,
+			)
+			return msgs, nil
+		}
+	})
 	// Simple middleware which will recover panics from event or command handlers.
 	// More about router middlewares you can find in the documentation:
 	// https://watermill.io/docs/messages-router/#middleware
@@ -56,7 +111,7 @@ func NewWatermillHandlers(
 						OverwriteSaramaConfig: newSubscriberSaramaConfig(),
 						Brokers:               []string{os.Getenv("KAFKA_ADDR")},
 						Unmarshaler:           KafkaMarshaler,
-						ConsumerGroup:         params.EventName,
+						ConsumerGroup:         params.HandlerName,
 					},
 					logger,
 				)
@@ -72,6 +127,8 @@ func NewWatermillHandlers(
 	return eventProcessor.AddHandlers(
 		cqrs.NewEventHandler("SendWelcomeEmail", h.SendWelcomeEmail),
 		cqrs.NewEventHandler("ConfirmEmailChange", h.ConfirmEmailChange),
+		cqrs.NewEventHandler("NotifyEmailChange", h.NotifyEmailChange),
+		cqrs.NewEventHandler("AddUserToCRM", h.AddUserToCRM),
 	)
 }
 
@@ -89,6 +146,19 @@ func (h *WatermillHandlers) SendWelcomeEmail(ctx context.Context, event *UserReg
 	)
 }
 
+func (h *WatermillHandlers) NotifyEmailChange(ctx context.Context, event *UserEmailUpdated) error {
+	return h.emailSender.SendEmail(
+		ctx,
+		event.OldEmail,
+		"Your email address is updated!",
+		fmt.Sprintf("Hello,\n\n Your email is updated to %s", event.NewEmail),
+	)
+}
+
+func (h *WatermillHandlers) AddUserToCRM(ctx context.Context, event *UserRegistered) error {
+	return h.crmClient.SendUserToCRM(ctx, event.UserID, event.Name, event.Email)
+}
+
 func (h *WatermillHandlers) ConfirmEmailChange(ctx context.Context, event *UserEmailUpdated) error {
 	return h.emailSender.SendEmail(
 		ctx,
@@ -97,6 +167,8 @@ func (h *WatermillHandlers) ConfirmEmailChange(ctx context.Context, event *UserE
 		fmt.Sprintf("Hello, \n\nYour email has been changed to %s.", event.NewEmail),
 	)
 }
+
+const topic = "events"
 
 func NewEventBus() (*cqrs.EventBus, error) {
 	logger := newWatermillLogger()
@@ -116,7 +188,7 @@ func NewEventBus() (*cqrs.EventBus, error) {
 		pub,
 		cqrs.EventBusConfig{
 			GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
-				return params.EventName, nil
+				return topic, nil
 			},
 			Marshaler: CQRSMarshaler,
 		},
@@ -128,14 +200,42 @@ func NewEventBus() (*cqrs.EventBus, error) {
 	return eventBus, nil
 }
 
+const PartitionKeyMetadataField = "partition_key"
+
+func GenerateKafkaPartitionKey(topic string, msg *message.Message) (string, error) {
+	slog.Debug("setting partition key", "topic", topic, "metadata", msg.Metadata)
+	return msg.Metadata.Get(PartitionKeyMetadataField), nil
+}
+
 // This marshaler converts Watermill messages to Kafka messages and vice versa.
-var KafkaMarshaler = kafka.DefaultMarshaler{}
+var KafkaMarshaler = kafka.NewWithPartitioningMarshaler(GenerateKafkaPartitionKey)
 
 // This marshaler converts events to Watermill messages and vice versa.
-var CQRSMarshaler = cqrs.JSONMarshaler{
-	// It will generate topic names based on the event type.
-	// So for example, for the struct "UserRegistered" the name will be "UserRegistered".
-	GenerateName: cqrs.StructName,
+// var CQRSMarshaler = cqrs.JSONMarshaler{
+// 	// It will generate topic names based on the event type.
+// 	// So for example, for the struct "UserRegistered" the name will be "UserRegistered".
+// 	GenerateName: cqrs.StructName,
+// }
+
+var CQRSMarshaler = cqrs.CommandEventMarshalerDecorator{
+	CommandEventMarshaler: cqrs.JSONMarshaler{
+		GenerateName: cqrs.StructName,
+	},
+	DecorateFunc: func(v any, msg *message.Message) error {
+		pm, ok := v.(Event)
+		if !ok {
+			return fmt.Errorf("%T does not implement Event and can't be marsheled", v)
+		}
+
+		partionKey := pm.PartitionKey()
+
+		if partionKey == "" {
+			return fmt.Errorf("partion key is empty")
+		}
+
+		msg.Metadata.Set(PartitionKeyMetadataField, partionKey)
+		return nil
+	},
 }
 
 func newSubscriberSaramaConfig() *sarama.Config {

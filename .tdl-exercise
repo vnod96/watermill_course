@@ -1,4 +1,4 @@
-exercise_id = "1108d9cd-6bcf-451b-96d7-d295c21fd7ed"
-directory = "02-basics/01-publish"
+exercise_id = "2c4d1c97-2088-4f83-b025-576f690ea39c"
+directory = "project"
 is_text_only = false
-is_optional = false
+is_optional = true
