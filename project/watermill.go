@@ -150,7 +150,7 @@ func (h *WatermillHandlers) NotifyEmailChange(ctx context.Context, event *UserEm
 	return h.emailSender.SendEmail(
 		ctx,
 		event.OldEmail,
-		"Your email is modified",
+		"Your email is updated",
 		"Hello, Your email is modified to " + event.NewEmail,
 	)
 }
