@@ -102,7 +102,7 @@ func NewWatermillHandlers(
 						OverwriteSaramaConfig: newSubscriberSaramaConfig(),
 						Brokers:               []string{os.Getenv("KAFKA_ADDR")},
 						Unmarshaler:           KafkaMarshaler,
-						ConsumerGroup:         params.EventName,
+						ConsumerGroup:         params.HandlerName,
 					},
 					logger,
 				)
@@ -118,6 +118,8 @@ func NewWatermillHandlers(
 	return eventProcessor.AddHandlers(
 		cqrs.NewEventHandler("SendWelcomeEmail", h.SendWelcomeEmail),
 		cqrs.NewEventHandler("ConfirmEmailChange", h.ConfirmEmailChange),
+		cqrs.NewEventHandler("AddToCRM", h.AddToCRM),
+		cqrs.NewEventHandler("NotifyEmailChange", h.NotifyEmailChange),
 	)
 }
 
@@ -142,6 +144,19 @@ func (h *WatermillHandlers) ConfirmEmailChange(ctx context.Context, event *UserE
 		"Confirm your new email address",
 		"Hello,\n\nPlease confirm this is your new email address.",
 	)
+}
+
+func (h *WatermillHandlers) NotifyEmailChange(ctx context.Context, event *UserEmailUpdated) error {
+	return h.emailSender.SendEmail(
+		ctx,
+		event.OldEmail,
+		"Your email is modified",
+		"Hello, Your email is modified to " + event.NewEmail,
+	)
+}
+
+func (h *WatermillHandlers) AddToCRM(ctx context.Context, event *UserRegistered) error {
+	return h.crmClient.SendUserToCRM(ctx, event.UserID, event.Name, event.Email)
 }
 
 func NewEventBus() (*cqrs.EventBus, error) {
