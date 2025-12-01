@@ -1,0 +1,27 @@
+services:
+  gateway:
+    image: threedotslabs/watermill-quickstart-gateway:latest
+    pull_policy: always
+    ports:
+      - "8888:8080"
+    environment:
+      SOLUTION_BASE_URL: "http://host.docker.internal:8080/"
+
+    # this allows webhooks from Gateway to call your solution on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  kafka:
+    image: redpandadata/redpanda:v25.2.2
+    ports:
+      - "9093:9093"
+    command: redpanda start --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:9093 --advertise-kafka-addr internal://kafka:9092,external://localhost:9093 --overprovisioned --node-id 0 --check=false --smp=1 --mode=dev-container
+
+  postgres:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: db
+    ports:
+      - "5432:5432"

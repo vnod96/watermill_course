@@ -86,20 +86,21 @@ func main() {
 		panic(err)
 	}
 
-	err = eventProcessor.AddHandlers(cqrs.NewEventHandler("device_reading_received_handler", func(ctx context.Context, event *DeviceReadingReceived) error {
-		switch event.Type {
-		case ReadingTypeHumidity:
-			return eventBus.Publish(ctx, &HumidityChanged{Value: event.Value})
-		case ReadingTypeTemperature:
-			return eventBus.Publish(ctx, &TemperatureChanged{Value: event.Value})
-		default:
-			return errors.New("unknown event type")
-		}
-	}))
-
-	if err != nil {
-		panic(err)
-	}
+	eventProcessor.AddHandler(cqrs.NewEventHandler(
+		"device-reading-handler",
+		func(ctx context.Context, event *DeviceReadingReceived) error {
+			if event.Type == "temperature" {
+				return eventBus.Publish(ctx, TemperatureChanged{
+					Value: event.Value,
+				})
+			} else if event.Type == "humidity" {
+				return eventBus.Publish(ctx, HumidityChanged{
+					Value: event.Value,
+				})
+			}
+			return errors.New("unknown event")
+		},
+	))
 
 	err = router.Run(context.Background())
 	if err != nil {

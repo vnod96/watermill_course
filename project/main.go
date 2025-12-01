@@ -87,10 +87,6 @@ func main() {
 		return echoRouter.Shutdown(context.Background())
 	})
 
-	errgrp.Go(func() error {
-		return RunForwarder(ctx, db)
-	})
-
 	if err := errgrp.Wait(); err != nil {
 		panic(err)
 	}

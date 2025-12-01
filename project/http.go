@@ -80,10 +80,7 @@ func (h *HTTPHandlers) PostUsers(c echo.Context) error {
 		}
 
 		// Warning! This isn't done within the transaction. We'll fix it in the next modules.
-		// if err := h.eventBus.Publish(ctx, event); err != nil {
-		// 	return fmt.Errorf("failed to publish event: %w", err)
-		// }
-		if err := PublishEventInTx(ctx, event, tx); err != nil {
+		if err := h.eventBus.Publish(ctx, event); err != nil {
 			return fmt.Errorf("failed to publish event: %w", err)
 		}
 
@@ -153,16 +150,14 @@ func (h *HTTPHandlers) PostUserEmail(c echo.Context) error {
 			return echo.ErrNotFound
 		}
 
-		// TODO: Publish UserEmailUpdated event
-		event := UserEmailUpdated{
+		event := UserEmailUpdated {
 			UserID: userID,
-			OldEmail: oldEmail,
 			NewEmail: req.NewEmail,
-			UpdatedAt: time.Now().UTC(),
+			OldEmail: oldEmail,
+			UpdatedAt: time.Now(),
 		}
 
-		// if err := h.eventBus.Publish(ctx, event); err != nil {
-		if err := PublishEventInTx(ctx, event, tx); err != nil {
+		if err := h.eventBus.Publish(ctx, event); err != nil {
 			return fmt.Errorf("failed to publish event: %w", err)
 		}
 

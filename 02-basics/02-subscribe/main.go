@@ -40,9 +40,8 @@ func main() {
 		panic(err)
 	}
 
-	// TODO Process messages
 	for msg := range messages {
-		fmt.Printf("Message ID: %v - %v\n", msg.UUID, string(msg.Payload))
+		fmt.Printf("Message ID: %v - %v", msg.UUID, string(msg.Payload))
 		msg.Ack()
 	}
 }

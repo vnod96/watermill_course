@@ -47,19 +47,18 @@ func main() {
 
 	router := message.NewDefaultRouter(logger)
 
-	// TODO Add handler to the router
 	router.AddHandler(
-		"reverse_string",
+		"word-handler",
 		"words",
 		sub,
 		"reversed",
 		pub,
-func(msg *message.Message) ([]*message.Message, error) {
-	word := string(msg.Payload)
-	rev := reverseString(word)
-	newMsg := message.NewMessage(watermill.NewUUID(), []byte(rev))
-	return []*message.Message{newMsg}, nil
-},
+		func(msg *message.Message) ([]*message.Message, error) {
+			v := string(msg.Payload)
+			rS := reverseString(v)
+			msg = message.NewMessage(watermill.NewUUID(), []byte(rS))
+			return []*message.Message{msg}, nil
+		},
 	)
 
 	err = router.Run(context.Background())

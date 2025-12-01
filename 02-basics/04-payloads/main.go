@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 
 	"github.com/IBM/sarama"
@@ -61,8 +60,9 @@ func main() {
 
 	router := message.NewDefaultRouter(logger)
 
+	// TODO Add consumer handler
 	router.AddConsumerHandler(
-		"reading_consumer_handler",
+		"readings-handler",
 		"readings",
 		sub,
 		func(msg *message.Message) error {
@@ -71,28 +71,13 @@ func main() {
 			if err != nil {
 				return err
 			}
-			readingType := event.Type
 
-			m, err := json.Marshal(event)
-			if err != nil {
-				return err
+			if event.Type == "temperature" || event.Type == "humidity" {
+				pub.Publish(string(event.Type), msg)
 			}
 
-			switch readingType {
-			case ReadingTypeTemperature:
-				err := pub.Publish(string(ReadingTypeTemperature), message.NewMessage(watermill.NewUUID(), m))
-				if err != nil {
-					return err
-				}
-			case ReadingTypeHumidity:
-				err := pub.Publish(string(ReadingTypeHumidity), message.NewMessage(watermill.NewUUID(), m))
-				if err != nil {
-					return err
-				}
-			default:
-				return errors.New("unknown type")
-			}
-			return nil;
+			return nil
+			
 		},
 	)
 

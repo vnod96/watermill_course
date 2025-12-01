@@ -21,10 +21,14 @@ func main() {
 		panic(err)
 	}
 
-	alpha_msg := message.NewMessage(watermill.NewUUID(), []byte("alpha"))
-	bravo_msg := message.NewMessage(watermill.NewUUID(), []byte("bravo"))
-
 	// TODO Publish messages
-	pub.Publish("status", alpha_msg)
-	pub.Publish("status", bravo_msg)
+	err = pub.Publish("status", message.NewMessage(watermill.NewUUID(), []byte("alpha")))
+	if err != nil {
+		logger.Error("error publishing message", err, nil)
+	}
+
+	err = pub.Publish("status", message.NewMessage(watermill.NewUUID(), []byte("bravo")))
+	if err != nil {
+		logger.Error("error publishing message", err, nil)
+	}
 }
