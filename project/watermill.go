@@ -54,6 +54,20 @@ func NewWatermillRouter() (*message.Router, error) {
 		},
 	)
 
+	router.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
+		return func(msg *message.Message) ([]*message.Message, error) {
+			eventName := CQRSMarshaler.NameFromMessage(msg)
+			handlerName := message.HandlerNameFromCtx(msg.Context())
+
+			slog.Info(
+				"Received event",
+				"name", eventName,
+				"handler", handlerName,
+			)
+			return h(msg)
+		}
+	})
+
 	// Simple middleware which will recover panics from event or command handlers.
 	// More about router middlewares you can find in the documentation:
 	// https://watermill.io/docs/messages-router/#middleware
