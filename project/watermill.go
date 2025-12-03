@@ -200,10 +200,22 @@ func GenerateKafkaPartitionKey(topic string, msg *message.Message) (string, erro
 var KafkaMarshaler = kafka.NewWithPartitioningMarshaler(GenerateKafkaPartitionKey)
 
 // This marshaler converts events to Watermill messages and vice versa.
-var CQRSMarshaler = cqrs.JSONMarshaler{
-	// It will generate topic names based on the event type.
-	// So for example, for the struct "UserRegistered" the name will be "UserRegistered".
-	GenerateName: cqrs.StructName,
+var CQRSMarshaler = cqrs.CommandEventMarshalerDecorator {
+	CommandEventMarshaler: cqrs.JSONMarshaler{
+		GenerateName: cqrs.StructName,
+	},
+	DecorateFunc: func(v any, msg *message.Message) error {
+		pm, ok := v.(Event)
+		if !ok {
+			return fmt.Errorf("%v can't be marshaled, it does not implement Event", v)
+		}
+		pk := pm.PartitionKey()
+		if pk == "" {
+			return fmt.Errorf("partition key is empty")
+		}
+		msg.Metadata.Set(PartionKeyMetadataField, pk)
+		return nil
+	},
 }
 
 func newSubscriberSaramaConfig() *sarama.Config {
