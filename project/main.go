@@ -54,12 +54,7 @@ func main() {
 		panic(err)
 	}
 
-	eventBus, err := NewEventBus()
-	if err != nil {
-		panic(err)
-	}
-
-	echoRouter := NewHTTPRouter(db, eventBus)
+	echoRouter := NewHTTPRouter(db)
 
 	slog.Info("Starting service")
 
@@ -85,6 +80,10 @@ func main() {
 	errgrp.Go(func() error {
 		<-ctx.Done()
 		return echoRouter.Shutdown(context.Background())
+	})
+
+	errgrp.Go(func() error {
+		return RunForwarder(ctx, db)
 	})
 
 	if err := errgrp.Wait(); err != nil {

@@ -10,7 +10,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/gofrs/uuid/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -19,7 +18,6 @@ import (
 
 func NewHTTPRouter(
 	db *sqlx.DB,
-	eventBus *cqrs.EventBus,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -29,7 +27,6 @@ func NewHTTPRouter(
 
 	h := HTTPHandlers{
 		db:       db,
-		eventBus: eventBus,
 	}
 
 	e.GET("/health", func(c echo.Context) error {
@@ -44,7 +41,6 @@ func NewHTTPRouter(
 
 type HTTPHandlers struct {
 	db       *sqlx.DB
-	eventBus *cqrs.EventBus
 }
 
 func (h *HTTPHandlers) PostUsers(c echo.Context) error {
@@ -80,10 +76,13 @@ func (h *HTTPHandlers) PostUsers(c echo.Context) error {
 		}
 
 		// Warning! This isn't done within the transaction. We'll fix it in the next modules.
-		if err := h.eventBus.Publish(ctx, event); err != nil {
+		// if err := h.eventBus.Publish(ctx, event); err != nil {
+		// 	return fmt.Errorf("failed to publish event: %w", err)
+		// }
+
+		if err = PublishEventInTx(ctx, event, tx); err != nil {
 			return fmt.Errorf("failed to publish event: %w", err)
 		}
-
 		return nil
 	})
 	if err != nil {
@@ -157,7 +156,11 @@ func (h *HTTPHandlers) PostUserEmail(c echo.Context) error {
 			UpdatedAt: time.Now(),
 		}
 
-		if err := h.eventBus.Publish(ctx, event); err != nil {
+		// if err := h.eventBus.Publish(ctx, event); err != nil {
+		// 	return fmt.Errorf("failed to publish event: %w", err)
+		// }
+
+		if err = PublishEventInTx(ctx, event, tx); err != nil {
 			return fmt.Errorf("failed to publish event: %w", err)
 		}
 
