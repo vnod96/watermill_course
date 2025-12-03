@@ -189,8 +189,15 @@ func NewEventBus() (*cqrs.EventBus, error) {
 	return eventBus, nil
 }
 
+const PartionKeyMetadataField = "partition_key"
+
+func GenerateKafkaPartitionKey(topic string, msg *message.Message) (string, error){
+	slog.Debug("Setting partition key", "topic", topic, "msg_metadata", msg.Metadata)
+	return msg.Metadata.Get(PartionKeyMetadataField), nil
+}
+
 // This marshaler converts Watermill messages to Kafka messages and vice versa.
-var KafkaMarshaler = kafka.DefaultMarshaler{}
+var KafkaMarshaler = kafka.NewWithPartitioningMarshaler(GenerateKafkaPartitionKey)
 
 // This marshaler converts events to Watermill messages and vice versa.
 var CQRSMarshaler = cqrs.JSONMarshaler{

@@ -14,8 +14,20 @@ type UserRegistered struct {
 }
 
 type UserEmailUpdated struct {
-	UserID       uuid.UUID `json:"user_id"`
-	NewEmail         string    `json:"new_email"`
-	OldEmail        string    `json:"old_email"`
+	UserID    uuid.UUID `json:"user_id"`
+	NewEmail  string    `json:"new_email"`
+	OldEmail  string    `json:"old_email"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Event interface {
+	PartitionKey() string
+}
+
+func (u UserEmailUpdated) PartitionKey() string {
+	return u.UserID.String()
+}
+
+func (u UserRegistered) PartitionKey() string {
+	return u.UserID.String()
 }
